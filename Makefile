@@ -1,4 +1,4 @@
-# Makefile for Taulabs project
+# Makefile for dRonin project
 .DEFAULT_GOAL := help
 
 WHEREAMI := $(dir $(lastword $(MAKEFILE_LIST)))
@@ -208,7 +208,7 @@ help:
 	@echo "   [Packaging]"
 	@echo "     package_flight       - Build and package the dRonin flight firmware only"
 	@echo "     package_all_compress - Build and package all dRonin firmware and software"
-	@echo "     package_installer    - Builds a Tau Labs software installer"
+	@echo "     package_installer    - Builds a dRonin software installer"
 	@echo
 	@echo "   Notes:"
 	@echo "     - packages will be placed in $(PACKAGE_DIR)"
@@ -737,12 +737,33 @@ define EF_TEMPLATE
 .PHONY: ef_$(1)
 ef_$(1): ef_$(1)_bin ef_$(1)_hex
 
-FW_FILES += $(BUILD_DIR)/ef_$(1)/ef_$(1).bin
+FW_FILES += $(BUILD_DIR)/ef_$(1)/ef_$(1).hex
 
 ef_$(1)_%: TARGET=ef_$(1)
 ef_$(1)_%: OUTDIR=$(BUILD_DIR)/$$(TARGET)
 ef_$(1)_%: BOARD_ROOT_DIR=$(ROOT_DIR)/flight/targets/$(1)
-ef_$(1)_%: $(if filter(no,$(4)),fw_$(1)_tlfw,bl_$(1)_bin fw_$(1)_tlfw)
+
+# rule for bootloader, must come first
+$(eval $(call EF_RULE,$(1),$(2),$(3),$(4),fw_$(1)_tlfw bl_$(1)_bin))
+
+# rule for without bootloader
+$(eval $(call EF_RULE,$(1),$(2),$(3),$(4),fw_$(1)_tlfw))
+
+.PHONY: ef_$(1)_clean
+ef_$(1)_clean: TARGET=ef_$(1)
+ef_$(1)_clean: OUTDIR=$(BUILD_DIR)/$$(TARGET)
+ef_$(1)_clean:
+	$(V0) @echo " CLEAN      $$@"
+	$(V1) [ ! -d "$$(OUTDIR)" ] || $(RM) -r "$$(OUTDIR)"
+endef
+
+# $(1) = Canonical board name all in lower case (e.g. coptercontrol)
+# $(2) = Friendly board name
+# $(3) = Short board name
+# $(4) = yes for bootloader, no for no bootloader
+# $(5) = dependencies
+define EF_RULE
+ef_$(1)_%: $(5)
 	$(V1) mkdir -p $$(OUTDIR)/dep
 	$(V1) cd $(ROOT_DIR)/flight/targets/EntireFlash && \
 		$$(MAKE) -r --no-print-directory \
@@ -761,13 +782,6 @@ ef_$(1)_%: $(if filter(no,$(4)),fw_$(1)_tlfw,bl_$(1)_bin fw_$(1)_tlfw)
 		OUTDIR=$$(OUTDIR) \
 		\
 		$$*
-
-.PHONY: ef_$(1)_clean
-ef_$(1)_clean: TARGET=ef_$(1)
-ef_$(1)_clean: OUTDIR=$(BUILD_DIR)/$$(TARGET)
-ef_$(1)_clean:
-	$(V0) @echo " CLEAN      $$@"
-	$(V1) [ ! -d "$$(OUTDIR)" ] || $(RM) -r "$$(OUTDIR)"
 endef
 
 # When building any of the "all_*" targets, tell all sub makefiles to display
@@ -1008,7 +1022,7 @@ $(PACKAGE_TARGETS):
 package_flight: $(FLIGHTPKGNAME)
 
 $(FLIGHTPKGNAME): all_flight
-	$(ZIP) -j $@ $(FW_FILES) $^
+	$(ZIPBIN) -j $@ $(FW_FILES)
 
 ##############################
 #
